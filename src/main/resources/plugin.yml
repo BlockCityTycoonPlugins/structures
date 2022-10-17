@@ -1,0 +1,8 @@
+name: BlockCityTycoonStructures
+version: '${project.version}'
+main: me.darkmun.blockcitytycoonstructures.BlockCityTycoonStructures
+authors: [ Darkmun ]
+depend: [ProtocolLib, PacketWrapper]
+commands:
+  chunkchange:
+    description: Changes chunks from the config

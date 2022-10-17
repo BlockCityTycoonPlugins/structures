@@ -1,0 +1,67 @@
+1:
+  1:
+    1:
+      copy-from-chunk-x: -2
+      copy-from-chunk-z: 5
+      paste-to-chunk-x: -5
+      paste-to-chunk-z: 1
+    2:
+      copy-from-chunk-x: -2
+      copy-from-chunk-z: 6
+      paste-to-chunk-x: -5
+      paste-to-chunk-z: 2
+  2:
+    1:
+      copy-from-chunk-x: -1
+      copy-from-chunk-z: 1
+      paste-to-chunk-x: 0
+      paste-to-chunk-z: 0
+  3:
+    1:
+      copy-from-chunk-x: -1
+      copy-from-chunk-z: 1
+      paste-to-chunk-x: 0
+      paste-to-chunk-z: 0
+  4:
+    1:
+      copy-from-chunk-x: -1
+      copy-from-chunk-z: 1
+      paste-to-chunk-x: 0
+      paste-to-chunk-z: 0
+  5:
+    1:
+      copy-from-chunk-x: -1
+      copy-from-chunk-z: 1
+      paste-to-chunk-x: 0
+      paste-to-chunk-z: 0
+2:
+  1:
+    1:
+      copy-from-chunk-x: -1
+      copy-from-chunk-z: 1
+      paste-to-chunk-x: 0
+      paste-to-chunk-z: 0
+  2:
+    1:
+      copy-from-chunk-x: -1
+      copy-from-chunk-z: 1
+      paste-to-chunk-x: 0
+      paste-to-chunk-z: 0
+  3:
+    1:
+      copy-from-chunk-x: -1
+      copy-from-chunk-z: 1
+      paste-to-chunk-x: 0
+      paste-to-chunk-z: 0
+  4:
+    1:
+      copy-from-chunk-x: -1
+      copy-from-chunk-z: 1
+      paste-to-chunk-x: 0
+      paste-to-chunk-z: 0
+  5:
+    1:
+      copy-from-chunk-x: -1
+      copy-from-chunk-z: 1
+      paste-to-chunk-x: 0
+      paste-to-chunk-z: 0
