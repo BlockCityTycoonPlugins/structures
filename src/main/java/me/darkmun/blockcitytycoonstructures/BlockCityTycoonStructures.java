@@ -10,7 +10,6 @@ import com.comphenix.protocol.events.PacketEvent;
 import com.comphenix.protocol.wrappers.nbt.NbtBase;
 import com.comphenix.protocol.wrappers.nbt.io.NbtTextSerializer;
 import me.darkmun.blockcitytycoonstructures.commands.ChangeStructureCommand;
-import me.darkmun.blockcitytycoonstructures.listeners.JoinListener;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -38,16 +37,13 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
 
             playerUpgradesConfig.setup("playersUpgrades");
             playerUpgradesConfig.getConfig().options().copyDefaults(true);
-            //playerUpgradesConfig.saveConfig();
 
             chunkDataConfig.setup("chunkData");
             chunkDataConfig.getConfig().options().copyDefaults(true);
-            //chunkDataConfig.saveConfig();
 
 
 
             getCommand("chunkchange").setExecutor(new ChangeStructureCommand(this));
-            getServer().getPluginManager().registerEvents(new JoinListener(this), this);
 
             ProtocolManager manager = ProtocolLibrary.getProtocolManager();
             manager.addPacketListener(new PacketAdapter(this, PacketType.Play.Server.MAP_CHUNK) {
