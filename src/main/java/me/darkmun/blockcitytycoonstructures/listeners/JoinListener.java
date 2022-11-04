@@ -1,11 +1,9 @@
 package me.darkmun.blockcitytycoonstructures.listeners;
 
 import me.darkmun.blockcitytycoonstructures.BlockCityTycoonStructures;
-import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import java.util.Set;
 
 public class JoinListener implements Listener {
 
@@ -15,7 +13,7 @@ public class JoinListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
 
-        Player pl = e.getPlayer();
+        /*Player pl = e.getPlayer();
 
         Set<String> businesses = plugin.getConfig().getKeys(false);
 
@@ -27,6 +25,6 @@ public class JoinListener implements Listener {
                 plugin.getPlayerUpgradesConfig().getConfig().set(playerID + "." + business, "0");
             }
             plugin.getPlayerUpgradesConfig().saveConfig();
-        }
+        }*/
     }
 }
