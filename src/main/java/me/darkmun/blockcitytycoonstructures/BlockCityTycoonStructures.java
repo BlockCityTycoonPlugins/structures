@@ -15,6 +15,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.IOException;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -24,6 +25,7 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
 
     private CustomConfig playerUpgradesConfig;
     private CustomConfig chunkDataConfig;
+    private Database database;
 
     @Override
     public void onEnable() {
@@ -38,8 +40,16 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
             playerUpgradesConfig.setup("playersUpgrades");
             playerUpgradesConfig.getConfig().options().copyDefaults(true);
 
-            chunkDataConfig.setup("chunkData");
-            chunkDataConfig.getConfig().options().copyDefaults(true);
+            try {
+                database = new Database();
+                database.initializeDatabase();
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+
+            //chunkDataConfig.setup("chunkData");
+            //chunkDataConfig.getConfig().options().copyDefaults(true);
+
 
 
 
@@ -47,6 +57,7 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
 
             ProtocolManager manager = ProtocolLibrary.getProtocolManager();
             manager.addPacketListener(new PacketAdapter(this, PacketType.Play.Server.MAP_CHUNK) {
+                final NbtTextSerializer serializer = new NbtTextSerializer();
 
                 @Override
                 public void onPacketSending(PacketEvent event) {
@@ -57,7 +68,7 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
                     int ChunkX = packet.getIntegers().read(0);
                     int ChunkZ = packet.getIntegers().read(1);
 
-                    fillConfigWithChunkData(chunkDataConfig, wrapper, ChunkX, ChunkZ);
+                    //fillConfigWithChunkData(chunkDataConfig, wrapper, ChunkX, ChunkZ);
 
                     try {
                         changeChunkToPlayer(playerUpgradesConfig, chunkDataConfig, wrapper, ChunkX, ChunkZ, pl);
@@ -68,12 +79,14 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
 
                 public void fillConfigWithChunkData(CustomConfig chunkDataConfig, WrapperPlayServerMapChunk packet, int ChunkX, int ChunkZ) {
                     Set<String> businessesChunks = getConfig().getKeys(false);
+                    businessesChunks.remove("enable");
                     Set<String> businessChunkUpgrades;
                     Set<String> businessChunkUpgradeChunks;
                     byte[] data;
                     int bitMask;
                     boolean groundUp;
                     List<NbtBase<?>> tileEntities;
+                    List<String> configTileEntities = new ArrayList<>();
 
                     for (String businessChunk : businessesChunks) {
                         businessChunkUpgrades = getConfig().getConfigurationSection(businessChunk).getKeys(false);
@@ -82,28 +95,23 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
                             for (String businessChunkUpgradeChunk : businessChunkUpgradeChunks) {
                                 int businessUpgradeChunkX = getConfig().getInt(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".copy-from-chunk-x");
                                 int businessUpgradeChunkZ = getConfig().getInt(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".copy-from-chunk-z");
-                                Bukkit.getLogger().info("Before copying");
                                 if ((businessUpgradeChunkX == ChunkX) && (businessUpgradeChunkZ == ChunkZ) && !chunkDataConfig.getConfig().contains(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk)) {
-                                    Bukkit.getLogger().info("During copying");
                                     data = packet.getData();
                                     bitMask = packet.getBitmask();
                                     groundUp = packet.getGroundUpContinuous();
                                     tileEntities = packet.getTileEntities();
-                                    String hey;
                                     if (!tileEntities.isEmpty()) {
-                                        NbtTextSerializer serializer = new NbtTextSerializer();
-                                        int i = 0;
                                         for (NbtBase<?> tileEntity : tileEntities) {
-                                            hey = serializer.serialize(tileEntity);
-                                            chunkDataConfig.getConfig().set(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".tile-entities-" + i, hey);
-                                            i++;
+                                            configTileEntities.add(serializer.serialize(tileEntity));
                                         }
                                     }
-                                    chunkDataConfig.getConfig().set(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".data", data);
-                                    chunkDataConfig.getConfig().set(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".bit-mask", bitMask);
-                                    chunkDataConfig.getConfig().set(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".ground-up-continuous", groundUp);
+                                    //chunkDataConfig.getConfig().set(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".data", data);
+                                    //chunkDataConfig.getConfig().set(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".bit-mask", bitMask);
+                                    //chunkDataConfig.getConfig().set(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".ground-up-continuous", groundUp);
+                                    //chunkDataConfig.getConfig().set(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".tile-entities", configTileEntities);
 
-                                    chunkDataConfig.saveConfig();
+                                    //chunkDataConfig.saveConfig();
+                                    return;
                                 }
                             }
                         }
@@ -136,9 +144,12 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
                                         data = (byte []) chunkDataConfig.getConfig().get(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".data");
                                         bitMask = chunkDataConfig.getConfig().getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".bit-mask");
                                         groundUp = chunkDataConfig.getConfig().getBoolean(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".ground-up-continuous");
-                                        NbtTextSerializer serializer = new NbtTextSerializer();
 
-                                        int i = 0;
+                                        List<String> configTileEntities = chunkDataConfig.getConfig().getStringList(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".tile-entities");
+                                        for (String tileEntity : configTileEntities) {
+                                            tileEntities.add(serializer.deserialize(tileEntity));
+                                        }
+                                        /*int i = 0;
                                         while(chunkDataConfig.getConfig().contains(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".tile-entities-" + i)) {
 
                                             String str = chunkDataConfig.getConfig().getString(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".tile-entities-" + i);
@@ -146,13 +157,14 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
                                                 tileEntities.add(serializer.deserialize(str));
                                             }
                                             i++;
-                                        }
+                                        }*/
 
 
                                         packet.setData(data);
                                         packet.setBitmask(bitMask);
                                         packet.setGroundUpContinuous(groundUp);
                                         packet.setTileEntities(tileEntities);
+                                        return;
                                     }
                                 }
 
