@@ -1,6 +1,7 @@
 package me.darkmun.blockcitytycoonstructures.commands;
 
 import com.comphenix.packetwrapper.WrapperPlayServerMapChunk;
+import com.comphenix.packetwrapper.WrapperPlayServerUnloadChunk;
 import me.darkmun.blockcitytycoonstructures.BlockCityTycoonStructures;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -31,7 +32,7 @@ public class ChangeStructureCommand implements CommandExecutor {
                         Set<String> chunks = plugin.getConfig().getConfigurationSection(args[1] + "." + args[2]).getKeys(false);
 
                         WrapperPlayServerMapChunk wrapperChunk;
-
+                        WrapperPlayServerUnloadChunk wrapperUnloadChunk;
                         plugin.getPlayerUpgradesConfig().getConfig().set(pl.getUniqueId().toString() + "." + args[1], args[2]);
                         plugin.getPlayerUpgradesConfig().saveConfig();
                         for (String chunk : chunks) {
@@ -39,6 +40,11 @@ public class ChangeStructureCommand implements CommandExecutor {
                             ChunkZ = plugin.getConfig().getInt(args[1] + "." + args[2] + "." + chunk + ".paste-to-chunk-z");
 
                             //packetChunk = manager.createPacket(PacketType.Play.Server.MAP_CHUNK);
+                            /*wrapperUnloadChunk = new WrapperPlayServerUnloadChunk();
+                            wrapperUnloadChunk.setChunkX(ChunkX);
+                            wrapperUnloadChunk.setChunkZ(ChunkZ);
+                            wrapperUnloadChunk.sendPacket(pl);*/
+
                             wrapperChunk = new WrapperPlayServerMapChunk();
                             wrapperChunk.setChunkX(ChunkX);
                             wrapperChunk.setChunkZ(ChunkZ);

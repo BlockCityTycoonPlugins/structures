@@ -13,8 +13,13 @@ public class Database {
             return connection;
         }
 
+        java.util.Properties conProperties = new java.util.Properties();
+        conProperties.put("user", "u95570_LRzuS0M9U7");
+        conProperties.put("password", "uMGeUJbmt!oH^FYk^I1VSSTW");
+        conProperties.put("autoReconnect", "true");
+        conProperties.put("maxReconnects", "5");
         String url = "jdbc:mysql://mysql2.joinserver.xyz:3306/s95570_BlockCityTycoon";
-        connection = DriverManager.getConnection(url, "u95570_LRzuS0M9U7", "uMGeUJbmt!oH^FYk^I1VSSTW");
+        connection = DriverManager.getConnection(url, conProperties);
         return connection;
     }
 
@@ -25,4 +30,13 @@ public class Database {
         statement.close();
     }
 
+    public void closeConnection() {
+        try {
+            if (connection != null) {
+                connection.close();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
 }
