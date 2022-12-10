@@ -25,7 +25,7 @@ public class Database {
 
     public void initializeDatabase() throws SQLException {
         Statement statement = getConnection().createStatement();
-        String sql = "CREATE TABLE IF NOT EXISTS chunk_data(structure VARCHAR(30), upgrade VARCHAR(30), chunk VARCHAR(30), data BLOB, bit_mask INTEGER, ground_up_continuous BOOLEAN, tile_entities BLOB)";
+        String sql = "CREATE TABLE IF NOT EXISTS chunk_data(structure VARCHAR(30), upgrade VARCHAR(30), chunk VARCHAR(30), data BLOB, bit_mask INTEGER, ground_up_continuous BOOLEAN, tile_entities BLOB, paintings BLOB, item_frames BLOB)";
         statement.execute(sql);
         statement.close();
     }

@@ -176,9 +176,6 @@ public class ChunkDataSerializer {
         for (int sectionY = 0; sectionY < (CHUNK_HEIGHT / SECTION_HEIGHT); sectionY++) {
             if ((mask & (1 << sectionY)) != 0) {  // Is the given bit set in the mask?
                 byte bitsPerBlock = data.readByte();
-                Bukkit.getLogger().info("Bits per block: " + bitsPerBlock);
-                //Palette palette = ChoosePalette(bitsPerBlock);
-                //palette.read(data);
 
                 ChunkSection section;
                 if (Bukkit.getWorld("world").getEnvironment().getId() == org.bukkit.World.Environment.NORMAL.getId()) {
