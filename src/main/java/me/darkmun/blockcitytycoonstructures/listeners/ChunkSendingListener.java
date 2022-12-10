@@ -1,32 +1,35 @@
 package me.darkmun.blockcitytycoonstructures.listeners;
 
-import com.comphenix.packetwrapper.WrapperPlayServerMapChunk;
-import com.comphenix.packetwrapper.WrapperPlayServerSpawnEntityPainting;
-import com.comphenix.packetwrapper.WrapperPlayServerUnloadChunk;
+import com.comphenix.packetwrapper.*;
 import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.events.PacketAdapter;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
 import com.comphenix.protocol.wrappers.BlockPosition;
 import com.comphenix.protocol.wrappers.EnumWrappers;
+import com.comphenix.protocol.wrappers.WrappedDataWatcher;
+import com.comphenix.protocol.wrappers.WrappedWatchableObject;
 import com.comphenix.protocol.wrappers.nbt.NbtBase;
 import com.comphenix.protocol.wrappers.nbt.NbtFactory;
 import com.comphenix.protocol.wrappers.nbt.io.NbtBinarySerializer;
 import io.netty.buffer.Unpooled;
 import me.darkmun.blockcitytycoonstructures.BlockCityTycoonStructures;
-import me.darkmun.blockcitytycoonstructures.ChunkDataSerializer;
+import me.darkmun.blockcitytycoonstructures.serializers.ChunkDataSerializer;
 import me.darkmun.blockcitytycoonstructures.CustomConfig;
-import me.darkmun.blockcitytycoonstructures.NbtTagCompoundSerializer;
+import me.darkmun.blockcitytycoonstructures.serializers.NbtTagCompoundSerializer;
 import net.minecraft.server.v1_12_R1.*;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.craftbukkit.v1_12_R1.CraftWorld;
 import org.bukkit.craftbukkit.v1_12_R1.entity.CraftPlayer;
+import org.bukkit.entity.ItemFrame;
 import org.bukkit.entity.Painting;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
+import javax.xml.crypto.Data;
 import java.io.*;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -116,17 +119,26 @@ public class ChunkSendingListener extends PacketAdapter {
                             byte[] bytes = baos.toByteArray();
                             statement.setBytes(7, bytes);
 
-                            ByteArrayOutputStream baos1 = new ByteArrayOutputStream();
-                            DataOutputStream out1 = new DataOutputStream(baos1);
-                            serializePaintingsFromChunk(world, businessUpgradeChunkX, businessUpgradeChunkZ, out1);
-                            if (baos1.toByteArray().length == 0) {
+                            ByteArrayOutputStream baosPaintings = new ByteArrayOutputStream();
+                            DataOutputStream outPainting = new DataOutputStream(baosPaintings);
+                            serializePaintingsFromChunk(world, businessUpgradeChunkX, businessUpgradeChunkZ, outPainting);
+                            /*if (baosPaintings.toByteArray().length == 0) {
                                 Bukkit.getLogger().info("Empty paintings");
                             } else {
                                 Bukkit.getLogger().info("Not empty paintings");
-                            }
-                            statement.setBytes(8, baos1.toByteArray());
+                            }*/
+                            statement.setBytes(8, baosPaintings.toByteArray());
 
-                            statement.setBytes(9, null);
+                            ByteArrayOutputStream baosItemFrames = new ByteArrayOutputStream();
+                            DataOutputStream outItemFrames = new DataOutputStream(baosItemFrames);
+                            serializeItemFramesFromChunk(world, businessUpgradeChunkX, businessUpgradeChunkZ, outItemFrames);
+                            /*if (baosItemFrames.toByteArray().length == 0) {
+                                Bukkit.getLogger().info("Empty item frames");
+                            } else {
+                                Bukkit.getLogger().info("Not empty item frames");
+                            }*/
+                            statement.setBytes(9, baosItemFrames.toByteArray());
+
                             statement.setString(10, businessChunk);
                             statement.setString(11, businessChunkUpgrade);
                             statement.setString(12, businessChunkUpgradeChunk);
@@ -179,6 +191,7 @@ public class ChunkSendingListener extends PacketAdapter {
                                 groundUp = set.getBoolean("ground_up_continuous");
                                 byte[] tileEntitiesBytes = set.getBytes("tile_entities");
                                 byte[] paintingBytes = set.getBytes("paintings");
+                                byte[] itemFrameBytes = set.getBytes("item_frames");
 
 
                                 List<NbtBase<?>> tileEntities = new ArrayList<>();
@@ -218,17 +231,30 @@ public class ChunkSendingListener extends PacketAdapter {
                                                         }
                                                     }
                                                 }*/
-                                ByteArrayInputStream bais1 = new ByteArrayInputStream(paintingBytes);
-                                List<NBTTagCompound> paintings = deserializePaintings(player.getWorld(), bais1);
+                                ByteArrayInputStream baisPaintings = new ByteArrayInputStream(paintingBytes);
+                                List<NBTTagCompound> paintings = deserializeEntities(baisPaintings);
                                 for (NBTTagCompound painting : paintings) {
                                     double paintingX = painting.getInt("TileX");
                                     double paintingY = painting.getInt("TileY");
                                     double paintingZ = painting.getInt("TileZ");
-                                    Bukkit.getLogger().info("Painting X: " + paintingX + " Painting Y: " + paintingY + " Painting Z: " + paintingZ);
                                     Location newLocation = new Location(player.getWorld(), paintingX + CHUNK_WIDTH * chunkXDelta, paintingY, paintingZ + CHUNK_WIDTH * chunkZDelta);
-                                    Bukkit.getLogger().info("Painting X (new): " + (paintingX + CHUNK_WIDTH * chunkXDelta) + " Painting Y (new): " + paintingY + " Painting Z (new): " + (paintingZ + CHUNK_WIDTH * chunkZDelta));
                                     sendPaintingFromNBT(painting, newLocation, player);
                                 }
+
+                                ByteArrayInputStream baisItemFrames = new ByteArrayInputStream(itemFrameBytes);
+                                List<NBTTagCompound> itemFrames = deserializeEntities(baisItemFrames);
+                                Bukkit.getLogger().info("Item frames size: " + itemFrames.size());
+                                for (NBTTagCompound itemFrame : itemFrames) {
+                                    NBTTagList nbttaglist = itemFrame.getList("Pos", 6);
+                                    double paintingX = nbttaglist.f(0);
+                                    double paintingY = nbttaglist.f(1);
+                                    double paintingZ = nbttaglist.f(2);
+                                    Bukkit.getLogger().info(String.format("X: %s Y: %s Z: %s", paintingX, paintingY, paintingZ));
+                                    Location newLocation = new Location(player.getWorld(), paintingX + CHUNK_WIDTH * chunkXDelta, paintingY, paintingZ + CHUNK_WIDTH * chunkZDelta);
+                                    sendItemFrameFromNBT(itemFrame, newLocation, player);
+                                    Bukkit.getLogger().info("End of loop");
+                                }
+                                Bukkit.getLogger().info("After loop");
 
                                 Chunk chunk;
                                 if (groundUp) {
@@ -308,23 +334,86 @@ public class ChunkSendingListener extends PacketAdapter {
         wrapper.sendPacket(pl);
     }
 
+    private void sendItemFrameFromNBT(NBTTagCompound compound, Location location, Player pl) {
+        if (entityCount == Integer.MIN_VALUE) {
+            entityCount = 0;
+        }
+        long start = System.nanoTime();
+        WrapperPlayServerSpawnEntity wrapperObject = new WrapperPlayServerSpawnEntity();
+        int entityID = --entityCount;
+        /*EntityItemFrame entity = new EntityItemFrame(((CraftWorld)pl.getWorld()).getHandle());
+        entity.f(compound);
+        entity.a(compound);
+        PacketPlayOutSpawnEntity packet = new PacketPlayOutSpawnEntity(entity, 71, EnumDirection.fromType2(compound.getByte("Facing")).get2DRotationValue(), new net.minecraft.server.v1_12_R1.BlockPosition(location.getX(), location.getY(), location.getZ()));
+        ((CraftPlayer)pl).getHandle().playerConnection.sendPacket(packet);*/
+        wrapperObject.setEntityID(entityID);
+        wrapperObject.setType(71);
+        wrapperObject.setX(location.getX());
+        wrapperObject.setY(location.getY());
+        wrapperObject.setZ(location.getZ());
+        wrapperObject.setObjectData(EnumDirection.fromType2(compound.getByte("Facing")).get2DRotationValue());
+
+        NBTTagList nbttaglist2 = compound.getList("Rotation", 5);
+        wrapperObject.setYaw(nbttaglist2.g(0));
+        wrapperObject.setPitch(nbttaglist2.g(1));
+        wrapperObject.sendPacket(pl);
+
+        /*EntityItemFrame entity = new EntityItemFrame(((CraftWorld)pl.getWorld()).getHandle());
+        entity.f(compound);
+        entity.a(compound);*/
+
+        /*NBTTagCompound nbttagcompound = compound.getCompound("Item");
+        DataWatcher dataWatcher = new DataWatcher(null);
+        dataWatcher.register(new DataWatcherObject<>(6, DataWatcherRegistry.f), new ItemStack(nbttagcompound));
+        PacketPlayOutEntityMetadata packet = new PacketPlayOutEntityMetadata(entityID, dataWatcher, true);
+        ((CraftPlayer)pl).getHandle().playerConnection.sendPacket(packet);*/
+
+        WrapperPlayServerEntityMetadata wrapperMetaData = new WrapperPlayServerEntityMetadata();
+        wrapperMetaData.setEntityID(entityID);
+        NBTTagCompound nbttagcompound = compound.getCompound("Item");
+        //List<WrappedWatchableObject> metadata = new ArrayList<>();
+        WrappedDataWatcher dataWatcher = new WrappedDataWatcher();
+        dataWatcher.setObject(6, WrappedDataWatcher.Registry.getItemStackSerializer(false), new ItemStack(nbttagcompound));
+        /*WrappedWatchableObject obj = new WrappedWatchableObject(6, new ItemStack(nbttagcompound));
+        obj.setValue(new ItemStack(nbttagcompound));
+        Bukkit.getLogger().info("Index: " + obj.getIndex());
+        metadata.add(obj);
+        metadata.add(new WrappedWatchableObject(0xff, null));*/
+        wrapperMetaData.setMetadata(dataWatcher.getWatchableObjects());
+        wrapperMetaData.sendPacket(pl);
+
+        Bukkit.getLogger().info("send function end");
+        long finish = System.nanoTime();
+        Bukkit.getLogger().info("Speed of sending item frame (ms): " + (finish - start));
+    }
+
     private void serializePaintingsFromChunk(World world, int chunkX, int chunkZ, DataOutput destination) throws IOException {
         for (Painting painting : world.getEntitiesByClass(Painting.class)) {
                 int paintingChunkX = (int) (painting.getLocation().getX()/CHUNK_WIDTH);
                 int paintingChunkZ = (int) (painting.getLocation().getZ()/CHUNK_WIDTH);
                 if (paintingChunkX == chunkX && paintingChunkZ == chunkZ) {
-                    NbtTagCompoundSerializer.serialize(painting, destination);
+                    NbtTagCompoundSerializer.serialize(destination, painting, Painting.class);
                 }
         }
     }
 
-    private List<NBTTagCompound> deserializePaintings(World world, InputStream source) throws IOException, MojangsonParseException {
-        List<NBTTagCompound> paintings = new ArrayList<>();
+    private void serializeItemFramesFromChunk(World world, int chunkX, int chunkZ, DataOutput destination) throws IOException {
+        for (ItemFrame itemFrame : world.getEntitiesByClass(ItemFrame.class)) {
+            int itemFrameChunkX = (int) (itemFrame.getLocation().getX()/CHUNK_WIDTH);
+            int itemFrameChunkZ = (int) (itemFrame.getLocation().getZ()/CHUNK_WIDTH);
+            if (itemFrameChunkX == chunkX && itemFrameChunkZ == chunkZ) {
+                NbtTagCompoundSerializer.serialize(destination, itemFrame, ItemFrame.class);
+            }
+        }
+    }
+
+    private List<NBTTagCompound> deserializeEntities(InputStream source) throws IOException, MojangsonParseException {
+        List<NBTTagCompound> entitiesNBT = new ArrayList<>();
         DataInputStream in = new DataInputStream(source);
         while (source.available() > 0) {
-            paintings.add(NbtTagCompoundSerializer.deserialize(in, world));
+            entitiesNBT.add(NbtTagCompoundSerializer.deserialize(in));
         }
-        return paintings;
+        return entitiesNBT;
     }
 
     public static int getEntityCount() {

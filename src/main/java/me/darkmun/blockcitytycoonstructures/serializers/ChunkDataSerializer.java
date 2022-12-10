@@ -1,4 +1,4 @@
-package me.darkmun.blockcitytycoonstructures;
+package me.darkmun.blockcitytycoonstructures.serializers;
 
 
 import com.comphenix.protocol.wrappers.WrappedBlockData;
