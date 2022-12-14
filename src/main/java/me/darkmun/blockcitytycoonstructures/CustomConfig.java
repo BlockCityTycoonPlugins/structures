@@ -11,9 +11,9 @@ public class CustomConfig {
     private File file;
     private FileConfiguration config;
 
-    public void setup(String configName) {
+    public void setup(File dataFolder, String configName) {
 
-        file = new File(Bukkit.getServer().getPluginManager().getPlugin("BlockCityTycoonStructures").getDataFolder(), configName + ".yml");
+        file = new File(dataFolder, configName + ".yml");
         if (!file.exists()) {
             try {
                 file.createNewFile();

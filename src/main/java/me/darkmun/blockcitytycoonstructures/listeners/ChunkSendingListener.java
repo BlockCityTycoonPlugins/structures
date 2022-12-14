@@ -19,17 +19,16 @@ import me.darkmun.blockcitytycoonstructures.CustomConfig;
 import me.darkmun.blockcitytycoonstructures.serializers.NbtTagCompoundSerializer;
 import net.minecraft.server.v1_12_R1.*;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.craftbukkit.v1_12_R1.CraftWorld;
 import org.bukkit.craftbukkit.v1_12_R1.entity.CraftPlayer;
 import org.bukkit.entity.ItemFrame;
 import org.bukkit.entity.Painting;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
-import javax.xml.crypto.Data;
 import java.io.*;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -38,11 +37,17 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 
+import static net.minecraft.server.v1_12_R1.BlockFurnace.FACING;
+
 public class ChunkSendingListener extends PacketAdapter {
 
     public static final int CHUNK_WIDTH = 16;
+    private static final int FOUNDRY_CHUNK_X = -5;
+    private static final int FOUNDRY_CHUNK_Z = 16;
     private static int entityCount = 0;
-    private final FileConfiguration BCTSconfig = BlockCityTycoonStructures.getPlugin().getConfig();
+    private static final FileConfiguration BCTSConfig = BlockCityTycoonStructures.getPlugin().getConfig();
+    private static final FileConfiguration BCTFPlayersFurnacesDataConfig = BlockCityTycoonStructures.getBCTFPlayersFurnacesDataConfig().getConfig();
+    private static final FileConfiguration BCTFConfig = Bukkit.getPluginManager().getPlugin("BlockCityTycoonFoundry").getConfig();
 
     public ChunkSendingListener(Plugin plugin, PacketType... types) {
         super(plugin, types);
@@ -56,13 +61,6 @@ public class ChunkSendingListener extends PacketAdapter {
         Player pl = event.getPlayer();
         int ChunkX = packet.getIntegers().read(0);
         int ChunkZ = packet.getIntegers().read(1);
-                    /*for (Entity painting : Bukkit.getWorld("world").getEntities()) {
-                        NbtFactory.fromNMSCompound().
-                        NBTTagCompound asd = new NBTTagCompound();
-                        asd.
-                        ((Painting)painting).
-                        Bukkit.getLogger().info("entity: " + painting.getType());
-                    }*/
         fillConfigWithChunkData(wrapper, ChunkX, ChunkZ, pl.getWorld());
 
         try {
@@ -73,7 +71,7 @@ public class ChunkSendingListener extends PacketAdapter {
     }
 
     public void fillConfigWithChunkData(WrapperPlayServerMapChunk packet, int ChunkX, int ChunkZ, World world) {
-        Set<String> businessesChunks = BCTSconfig.getKeys(false);
+        Set<String> businessesChunks = BCTSConfig.getKeys(false);
         businessesChunks.remove("enable");
         Set<String> businessChunkUpgrades;
         Set<String> businessChunkUpgradeChunks;
@@ -84,12 +82,12 @@ public class ChunkSendingListener extends PacketAdapter {
         List<String> configTileEntities = new ArrayList<>();
 
         for (String businessChunk : businessesChunks) {
-            businessChunkUpgrades = BCTSconfig.getConfigurationSection(businessChunk).getKeys(false);
+            businessChunkUpgrades = BCTSConfig.getConfigurationSection(businessChunk).getKeys(false);
             for (String businessChunkUpgrade : businessChunkUpgrades) {
-                businessChunkUpgradeChunks = BCTSconfig.getConfigurationSection(businessChunk + "." + businessChunkUpgrade).getKeys(false);
+                businessChunkUpgradeChunks = BCTSConfig.getConfigurationSection(businessChunk + "." + businessChunkUpgrade).getKeys(false);
                 for (String businessChunkUpgradeChunk : businessChunkUpgradeChunks) {
-                    int businessUpgradeChunkX = BCTSconfig.getInt(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".copy-from-chunk-x");
-                    int businessUpgradeChunkZ = BCTSconfig.getInt(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".copy-from-chunk-z");
+                    int businessUpgradeChunkX = BCTSConfig.getInt(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".copy-from-chunk-x");
+                    int businessUpgradeChunkZ = BCTSConfig.getInt(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk + ".copy-from-chunk-z");
                     if ((businessUpgradeChunkX == ChunkX) && (businessUpgradeChunkZ == ChunkZ) /*&& !chunkDataConfig.getConfig().contains(businessChunk + "." + businessChunkUpgrade + "." + businessChunkUpgradeChunk)*/) {
                         data = packet.getData();
                         bitMask = packet.getBitmask();
@@ -157,7 +155,7 @@ public class ChunkSendingListener extends PacketAdapter {
     }
 
     public void changeChunkToPlayer(CustomConfig playerUpgradesConfig, WrapperPlayServerMapChunk packet, int ChunkX, int ChunkZ, Player player) throws IOException {
-        Set<String> businesses = BCTSconfig.getKeys(false);
+        Set<String> businesses = BCTSConfig.getKeys(false);
         Set<String> businessChunkUpgradeChunks;
         String businessValue;
         String plUUID = player.getUniqueId().toString();
@@ -173,10 +171,10 @@ public class ChunkSendingListener extends PacketAdapter {
             if (playerUpgradesConfig.getConfig().contains(plUUID + "." + business)) {
                 businessValue = playerUpgradesConfig.getConfig().getString(plUUID + "." + business);
                 //if (chunkDataConfig.getConfig().contains(business + "." + businessValue)) {
-                businessChunkUpgradeChunks = BCTSconfig.getConfigurationSection(business + "." + businessValue).getKeys(false);
+                businessChunkUpgradeChunks = BCTSConfig.getConfigurationSection(business + "." + businessValue).getKeys(false);
                 for (String businessChunkUpgradeChunk : businessChunkUpgradeChunks) {
-                    pasteChunkX = BCTSconfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".paste-to-chunk-x");
-                    pasteChunkZ = BCTSconfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".paste-to-chunk-z");
+                    pasteChunkX = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".paste-to-chunk-x");
+                    pasteChunkZ = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".paste-to-chunk-z");
                     if ((ChunkX == pasteChunkX) && (ChunkZ == pasteChunkZ)) {
                         try {
                             PreparedStatement statement = BlockCityTycoonStructures.getDatabase().getConnection().prepareStatement("SELECT * FROM chunk_data WHERE structure = ? AND upgrade = ? AND chunk = ?");
@@ -202,8 +200,8 @@ public class ChunkSendingListener extends PacketAdapter {
                                     tileEntities.add(nbtSerializer.deserialize(in));
                                 }
 
-                                int copyChunkX = BCTSconfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".copy-from-chunk-x");
-                                int copyChunkZ = BCTSconfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".copy-from-chunk-z");
+                                int copyChunkX = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".copy-from-chunk-x");
+                                int copyChunkZ = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".copy-from-chunk-z");
                                 int chunkXDelta = pasteChunkX - copyChunkX;
                                 int chunkZDelta = pasteChunkZ - copyChunkZ;
 
@@ -216,21 +214,6 @@ public class ChunkSendingListener extends PacketAdapter {
 
                                 }
 
-                                                /*for (Painting painting : player.getWorld().getEntitiesByClass(Painting.class)) {
-                                                    int paintingChunkX = (int) (painting.getLocation().getX()/CHUNK_WIDTH);
-                                                    int paintingChunkZ = (int) (painting.getLocation().getZ()/CHUNK_WIDTH);
-                                                    if (paintingChunkX == copyChunkX && paintingChunkZ == copyChunkZ) {
-                                                        double paintingX = painting.getLocation().getX();
-                                                        double paintingY = painting.getLocation().getY();
-                                                        double paintingZ = painting.getLocation().getZ();
-                                                        Painting newPainting = clonePaintingEntityToAnotherLocation(painting, new Location(painting.getWorld(), paintingX + CHUNK_WIDTH * chunkXDelta, paintingY, paintingZ + CHUNK_WIDTH * chunkZDelta));
-                                                        for (Player pl : newPainting.getWorld().getPlayers()) {
-                                                            if (pl != player) {
-                                                                entityHider.hideEntity(pl, newPainting);
-                                                            }
-                                                        }
-                                                    }
-                                                }*/
                                 ByteArrayInputStream baisPaintings = new ByteArrayInputStream(paintingBytes);
                                 List<NBTTagCompound> paintings = deserializeEntities(baisPaintings);
                                 for (NBTTagCompound painting : paintings) {
@@ -264,6 +247,10 @@ public class ChunkSendingListener extends PacketAdapter {
                                 }
                                 ChunkDataSerializer chunkDataSerializer = new ChunkDataSerializer();
                                 chunkDataSerializer.ReadChunkColumn(chunk, bitMask, Unpooled.wrappedBuffer(data));
+                                if (ChunkX == FOUNDRY_CHUNK_X && ChunkZ == FOUNDRY_CHUNK_Z) {
+                                    setPlayersFoundryFurnacesToChunk(plUUID, chunk);
+                                }
+
                                 PacketPlayOutMapChunk packetMapChunk = new PacketPlayOutMapChunk(chunk, 65535);
 
                                 byte[] bytes;
@@ -338,53 +325,37 @@ public class ChunkSendingListener extends PacketAdapter {
         if (entityCount == Integer.MIN_VALUE) {
             entityCount = 0;
         }
-        long start = System.nanoTime();
-        WrapperPlayServerSpawnEntity wrapperObject = new WrapperPlayServerSpawnEntity();
         int entityID = --entityCount;
-        /*EntityItemFrame entity = new EntityItemFrame(((CraftWorld)pl.getWorld()).getHandle());
-        entity.f(compound);
-        entity.a(compound);
-        PacketPlayOutSpawnEntity packet = new PacketPlayOutSpawnEntity(entity, 71, EnumDirection.fromType2(compound.getByte("Facing")).get2DRotationValue(), new net.minecraft.server.v1_12_R1.BlockPosition(location.getX(), location.getY(), location.getZ()));
-        ((CraftPlayer)pl).getHandle().playerConnection.sendPacket(packet);*/
+        long start = System.nanoTime();
+
+        //Здесь создаем рамку
+        NBTTagList rotationNBT = compound.getList("Rotation", 5);
+
+        WrapperPlayServerSpawnEntity wrapperObject = new WrapperPlayServerSpawnEntity();
         wrapperObject.setEntityID(entityID);
         wrapperObject.setType(71);
         wrapperObject.setX(location.getX());
         wrapperObject.setY(location.getY());
         wrapperObject.setZ(location.getZ());
         wrapperObject.setObjectData(EnumDirection.fromType2(compound.getByte("Facing")).get2DRotationValue());
-
-        NBTTagList nbttaglist2 = compound.getList("Rotation", 5);
-        wrapperObject.setYaw(nbttaglist2.g(0));
-        wrapperObject.setPitch(nbttaglist2.g(1));
+        wrapperObject.setYaw(rotationNBT.g(0));
+        wrapperObject.setPitch(rotationNBT.g(1));
         wrapperObject.sendPacket(pl);
 
-        /*EntityItemFrame entity = new EntityItemFrame(((CraftWorld)pl.getWorld()).getHandle());
-        entity.f(compound);
-        entity.a(compound);*/
+        //А здесь "кладем" в рамку предмет
+        NBTTagCompound itemNBT = compound.getCompound("Item");
 
-        /*NBTTagCompound nbttagcompound = compound.getCompound("Item");
-        DataWatcher dataWatcher = new DataWatcher(null);
-        dataWatcher.register(new DataWatcherObject<>(6, DataWatcherRegistry.f), new ItemStack(nbttagcompound));
-        PacketPlayOutEntityMetadata packet = new PacketPlayOutEntityMetadata(entityID, dataWatcher, true);
-        ((CraftPlayer)pl).getHandle().playerConnection.sendPacket(packet);*/
+        WrappedDataWatcher dataWatcher = new WrappedDataWatcher();
+        dataWatcher.setObject(6, WrappedDataWatcher.Registry.getItemStackSerializer(false), new ItemStack(itemNBT));
+        List<WrappedWatchableObject> metadata = dataWatcher.getWatchableObjects();
 
         WrapperPlayServerEntityMetadata wrapperMetaData = new WrapperPlayServerEntityMetadata();
         wrapperMetaData.setEntityID(entityID);
-        NBTTagCompound nbttagcompound = compound.getCompound("Item");
-        //List<WrappedWatchableObject> metadata = new ArrayList<>();
-        WrappedDataWatcher dataWatcher = new WrappedDataWatcher();
-        dataWatcher.setObject(6, WrappedDataWatcher.Registry.getItemStackSerializer(false), new ItemStack(nbttagcompound));
-        /*WrappedWatchableObject obj = new WrappedWatchableObject(6, new ItemStack(nbttagcompound));
-        obj.setValue(new ItemStack(nbttagcompound));
-        Bukkit.getLogger().info("Index: " + obj.getIndex());
-        metadata.add(obj);
-        metadata.add(new WrappedWatchableObject(0xff, null));*/
-        wrapperMetaData.setMetadata(dataWatcher.getWatchableObjects());
+        wrapperMetaData.setMetadata(metadata);
         wrapperMetaData.sendPacket(pl);
 
-        Bukkit.getLogger().info("send function end");
         long finish = System.nanoTime();
-        Bukkit.getLogger().info("Speed of sending item frame (ms): " + (finish - start));
+        Bukkit.getLogger().info("Speed of sending item frame (ms): " + (finish - start)/1000000d);
     }
 
     private void serializePaintingsFromChunk(World world, int chunkX, int chunkZ, DataOutput destination) throws IOException {
@@ -414,6 +385,55 @@ public class ChunkSendingListener extends PacketAdapter {
             entitiesNBT.add(NbtTagCompoundSerializer.deserialize(in));
         }
         return entitiesNBT;
+    }
+
+    private void setPlayersFoundryFurnacesToChunk(String plUUID, Chunk chunk) {
+        Set<String> playersFurnaces = BCTFPlayersFurnacesDataConfig.getConfigurationSection(String.format("%s.furnaces", plUUID)).getKeys(false);
+        for (String onceBoughtFurnace : playersFurnaces) {
+            String state = BCTFPlayersFurnacesDataConfig.getString(String.format("%s.furnaces.%s.state", plUUID, onceBoughtFurnace));
+            int globalX = BCTFConfig.getInt(String.format("furnaces.%s.x", onceBoughtFurnace));
+            int globalY = BCTFConfig.getInt(String.format("furnaces.%s.y", onceBoughtFurnace));
+            int globalZ = BCTFConfig.getInt(String.format("furnaces.%s.z", onceBoughtFurnace));
+            String facing = BCTFConfig.getString(String.format("furnaces.%s.facing", onceBoughtFurnace)).toUpperCase();
+
+            IBlockData blockData;
+            if (state.equals("PLACED")) {
+                Bukkit.getLogger().info("Placed");
+                blockData = Blocks.FURNACE.getBlockData().set(FACING, EnumDirection.valueOf(facing));
+            } else if (state.equals("MELTS")) {
+                Bukkit.getLogger().info("Melts");
+                blockData = Blocks.LIT_FURNACE.getBlockData().set(FACING, EnumDirection.valueOf(facing));
+            } else {
+                Bukkit.getLogger().info("Empty");
+                blockData = Blocks.AIR.getBlockData();
+            }
+
+            int chunkSectionNum = globalY/16;
+            int x = getXInChunk(globalX);
+            int y = getYInChunk(globalY);
+            int z = getZInChunk(globalZ);
+            chunk.getSections()[chunkSectionNum].setType(x, y, z, blockData);
+            IBlockData block = chunk.getSections()[chunkSectionNum].getType(x, y, z);
+            Bukkit.getLogger().info("Блок: " + block.getBlock().getName());
+        }
+    }
+
+    public static int getXInChunk(int x) {
+        if (x < 0) {
+            return 16 + x % 16;
+        } else {
+            return x % 16;
+        }
+    }
+    public static int getYInChunk(int y) {
+        return y % 16;
+    }
+    public static int getZInChunk(int z) {
+        if (z < 0) {
+            return 16 + z % 16;
+        } else {
+            return z % 16;
+        }
     }
 
     public static int getEntityCount() {
