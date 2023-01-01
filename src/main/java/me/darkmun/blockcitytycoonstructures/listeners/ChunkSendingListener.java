@@ -19,7 +19,6 @@ import me.darkmun.blockcitytycoonstructures.CustomConfig;
 import me.darkmun.blockcitytycoonstructures.serializers.NbtTagCompoundSerializer;
 import net.minecraft.server.v1_12_R1.*;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -46,7 +45,7 @@ public class ChunkSendingListener extends PacketAdapter {
     private static final int FOUNDRY_CHUNK_Z = 16;
     private static int entityCount = 0;
     private static final FileConfiguration BCTSConfig = BlockCityTycoonStructures.getPlugin().getConfig();
-    private static final FileConfiguration BCTFPlayersFurnacesDataConfig = BlockCityTycoonStructures.getBCTFPlayersFurnacesDataConfig().getConfig();
+    private static final CustomConfig BCTFPlayersFurnacesDataConfig = BlockCityTycoonStructures.getBCTFPlayersFurnacesDataConfig();
     private static final FileConfiguration BCTFConfig = Bukkit.getPluginManager().getPlugin("BlockCityTycoonFoundry").getConfig();
 
     public ChunkSendingListener(Plugin plugin, PacketType... types) {
@@ -79,7 +78,6 @@ public class ChunkSendingListener extends PacketAdapter {
         int bitMask;
         boolean groundUp;
         List<NbtBase<?>> tileEntities;
-        List<String> configTileEntities = new ArrayList<>();
 
         for (String businessChunk : businessesChunks) {
             businessChunkUpgrades = BCTSConfig.getConfigurationSection(businessChunk).getKeys(false);
@@ -94,13 +92,12 @@ public class ChunkSendingListener extends PacketAdapter {
                         groundUp = packet.getGroundUpContinuous();
                         tileEntities = packet.getTileEntities();
 
-                        try {
-                            PreparedStatement statement = BlockCityTycoonStructures.getDatabase().getConnection()
-                                    .prepareStatement("INSERT INTO chunk_data (structure,upgrade,chunk,data,bit_mask,ground_up_continuous,tile_entities,paintings,item_frames) " +
-                                            "SELECT * FROM (SELECT ? AS structure, ? AS upgrade, ? AS chunk, ? AS data, ? AS bit_mask, ? AS ground_up_continuous, ? AS tile_entities, ? AS paintings, ? AS item_frames) AS temp " +
-                                            "WHERE NOT EXISTS ( " +
-                                            "    SELECT structure, upgrade, chunk FROM chunk_data WHERE structure = ? AND upgrade = ? AND chunk = ? " +
-                                            ") LIMIT 1");
+                        try(PreparedStatement statement = BlockCityTycoonStructures.getDatabase().getConnection()
+                                .prepareStatement("INSERT INTO chunk_data (structure,upgrade,chunk,data,bit_mask,ground_up_continuous,tile_entities,paintings,item_frames) " +
+                                        "SELECT * FROM (SELECT ? AS structure, ? AS upgrade, ? AS chunk, ? AS data, ? AS bit_mask, ? AS ground_up_continuous, ? AS tile_entities, ? AS paintings, ? AS item_frames) AS temp " +
+                                        "WHERE NOT EXISTS ( " +
+                                        "    SELECT structure, upgrade, chunk FROM chunk_data WHERE structure = ? AND upgrade = ? AND chunk = ? " +
+                                        ") LIMIT 1")) {
                             statement.setString(1, businessChunk);
                             statement.setString(2, businessChunkUpgrade);
                             statement.setString(3, businessChunkUpgradeChunk);
@@ -120,21 +117,11 @@ public class ChunkSendingListener extends PacketAdapter {
                             ByteArrayOutputStream baosPaintings = new ByteArrayOutputStream();
                             DataOutputStream outPainting = new DataOutputStream(baosPaintings);
                             serializePaintingsFromChunk(world, businessUpgradeChunkX, businessUpgradeChunkZ, outPainting);
-                            /*if (baosPaintings.toByteArray().length == 0) {
-                                Bukkit.getLogger().info("Empty paintings");
-                            } else {
-                                Bukkit.getLogger().info("Not empty paintings");
-                            }*/
                             statement.setBytes(8, baosPaintings.toByteArray());
 
                             ByteArrayOutputStream baosItemFrames = new ByteArrayOutputStream();
                             DataOutputStream outItemFrames = new DataOutputStream(baosItemFrames);
                             serializeItemFramesFromChunk(world, businessUpgradeChunkX, businessUpgradeChunkZ, outItemFrames);
-                            /*if (baosItemFrames.toByteArray().length == 0) {
-                                Bukkit.getLogger().info("Empty item frames");
-                            } else {
-                                Bukkit.getLogger().info("Not empty item frames");
-                            }*/
                             statement.setBytes(9, baosItemFrames.toByteArray());
 
                             statement.setString(10, businessChunk);
@@ -142,8 +129,6 @@ public class ChunkSendingListener extends PacketAdapter {
                             statement.setString(12, businessChunkUpgradeChunk);
 
                             statement.executeUpdate();
-
-                            statement.close();
                         } catch (SQLException | IOException ex) {
                             ex.printStackTrace();
                         }
@@ -154,6 +139,7 @@ public class ChunkSendingListener extends PacketAdapter {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public void changeChunkToPlayer(CustomConfig playerUpgradesConfig, WrapperPlayServerMapChunk packet, int ChunkX, int ChunkZ, Player player) throws IOException {
         Set<String> businesses = BCTSConfig.getKeys(false);
         Set<String> businessChunkUpgradeChunks;
@@ -176,12 +162,10 @@ public class ChunkSendingListener extends PacketAdapter {
                     pasteChunkX = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".paste-to-chunk-x");
                     pasteChunkZ = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".paste-to-chunk-z");
                     if ((ChunkX == pasteChunkX) && (ChunkZ == pasteChunkZ)) {
-                        try {
-                            PreparedStatement statement = BlockCityTycoonStructures.getDatabase().getConnection().prepareStatement("SELECT * FROM chunk_data WHERE structure = ? AND upgrade = ? AND chunk = ?");
+                        try (PreparedStatement statement = BlockCityTycoonStructures.getDatabase().getConnection().prepareStatement("SELECT * FROM chunk_data WHERE structure = ? AND upgrade = ? AND chunk = ?")) {
                             statement.setString(1, business);
                             statement.setString(2, businessValue);
                             statement.setString(3, businessChunkUpgradeChunk);
-
                             ResultSet set = statement.executeQuery();
                             if (set.next()) {
                                 data = set.getBytes("data");
@@ -226,18 +210,14 @@ public class ChunkSendingListener extends PacketAdapter {
 
                                 ByteArrayInputStream baisItemFrames = new ByteArrayInputStream(itemFrameBytes);
                                 List<NBTTagCompound> itemFrames = deserializeEntities(baisItemFrames);
-                                Bukkit.getLogger().info("Item frames size: " + itemFrames.size());
                                 for (NBTTagCompound itemFrame : itemFrames) {
                                     NBTTagList nbttaglist = itemFrame.getList("Pos", 6);
                                     double paintingX = nbttaglist.f(0);
                                     double paintingY = nbttaglist.f(1);
                                     double paintingZ = nbttaglist.f(2);
-                                    Bukkit.getLogger().info(String.format("X: %s Y: %s Z: %s", paintingX, paintingY, paintingZ));
                                     Location newLocation = new Location(player.getWorld(), paintingX + CHUNK_WIDTH * chunkXDelta, paintingY, paintingZ + CHUNK_WIDTH * chunkZDelta);
                                     sendItemFrameFromNBT(itemFrame, newLocation, player);
-                                    Bukkit.getLogger().info("End of loop");
                                 }
-                                Bukkit.getLogger().info("After loop");
 
                                 Chunk chunk;
                                 if (groundUp) {
@@ -261,12 +241,6 @@ public class ChunkSendingListener extends PacketAdapter {
                                     bytes = (byte[])dataField.get(packetMapChunk);
                                     dataField.setAccessible(false);
 
-                                    boolean[] bools = new boolean[data.length];
-                                    for (int i = 0; i < data.length; i++) {
-                                        bools[i] = data[i] == bytes[i];
-                                    }
-                                    //Bukkit.getLogger().info(Arrays.toString(bools));
-
                                     WrapperPlayServerUnloadChunk wrapperUnloadChunk = new WrapperPlayServerUnloadChunk();
                                     wrapperUnloadChunk.setChunkX(ChunkX);
                                     wrapperUnloadChunk.setChunkZ(ChunkZ);
@@ -287,23 +261,10 @@ public class ChunkSendingListener extends PacketAdapter {
                             ex.printStackTrace();
                         }
 
-                                        /*data = (byte []) chunkDataConfig.getConfig().get(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".data");
-                                        bitMask = chunkDataConfig.getConfig().getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".bit-mask");
-                                        groundUp = chunkDataConfig.getConfig().getBoolean(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".ground-up-continuous");
-
-                                        List<String> configTileEntities = chunkDataConfig.getConfig().getStringList(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".tile-entities");
-                                        for (String tileEntity : configTileEntities) {
-                                            tileEntities.add(serializer.deserialize(tileEntity));
-                                        }*/
-
-
                         return;
                     }
                 }
-
-                //}
             }
-
         }
     }
 
@@ -312,9 +273,7 @@ public class ChunkSendingListener extends PacketAdapter {
         if (entityCount == Integer.MIN_VALUE) {
             entityCount = 0;
         }
-        Bukkit.getLogger().info("old count: " + entityCount);
         wrapper.setEntityID(--entityCount);
-        Bukkit.getLogger().info("new count: " + entityCount);
         wrapper.getHandle().getStrings().write(0, compound.getString("Motive"));
         wrapper.setDirection(EnumWrappers.Direction.valueOf(EnumDirection.fromType2(compound.getByte("Facing")).toString().toUpperCase()));
         wrapper.setLocation(new BlockPosition(location.toVector()));
@@ -326,7 +285,6 @@ public class ChunkSendingListener extends PacketAdapter {
             entityCount = 0;
         }
         int entityID = --entityCount;
-        long start = System.nanoTime();
 
         //Здесь создаем рамку
         NBTTagList rotationNBT = compound.getList("Rotation", 5);
@@ -353,9 +311,6 @@ public class ChunkSendingListener extends PacketAdapter {
         wrapperMetaData.setEntityID(entityID);
         wrapperMetaData.setMetadata(metadata);
         wrapperMetaData.sendPacket(pl);
-
-        long finish = System.nanoTime();
-        Bukkit.getLogger().info("Speed of sending item frame (ms): " + (finish - start)/1000000d);
     }
 
     private void serializePaintingsFromChunk(World world, int chunkX, int chunkZ, DataOutput destination) throws IOException {
@@ -388,33 +343,31 @@ public class ChunkSendingListener extends PacketAdapter {
     }
 
     private void setPlayersFoundryFurnacesToChunk(String plUUID, Chunk chunk) {
-        Set<String> playersFurnaces = BCTFPlayersFurnacesDataConfig.getConfigurationSection(String.format("%s.furnaces", plUUID)).getKeys(false);
-        for (String onceBoughtFurnace : playersFurnaces) {
-            String state = BCTFPlayersFurnacesDataConfig.getString(String.format("%s.furnaces.%s.state", plUUID, onceBoughtFurnace));
-            int globalX = BCTFConfig.getInt(String.format("furnaces.%s.x", onceBoughtFurnace));
-            int globalY = BCTFConfig.getInt(String.format("furnaces.%s.y", onceBoughtFurnace));
-            int globalZ = BCTFConfig.getInt(String.format("furnaces.%s.z", onceBoughtFurnace));
-            String facing = BCTFConfig.getString(String.format("furnaces.%s.facing", onceBoughtFurnace)).toUpperCase();
+        BlockCityTycoonStructures.getBCTFPlayersFurnacesDataConfig().reloadConfig();
+        if (BCTFPlayersFurnacesDataConfig.getConfig().contains(plUUID)) {
+            Set<String> playersFurnaces = BCTFPlayersFurnacesDataConfig.getConfig().getConfigurationSection(String.format("%s.furnaces", plUUID)).getKeys(false);
+            for (String onceBoughtFurnace : playersFurnaces) {
+                String state = BCTFPlayersFurnacesDataConfig.getConfig().getString(String.format("%s.furnaces.%s.state", plUUID, onceBoughtFurnace));
+                int globalX = BCTFConfig.getInt(String.format("furnaces.%s.x", onceBoughtFurnace));
+                int globalY = BCTFConfig.getInt(String.format("furnaces.%s.y", onceBoughtFurnace));
+                int globalZ = BCTFConfig.getInt(String.format("furnaces.%s.z", onceBoughtFurnace));
+                String facing = BCTFConfig.getString(String.format("furnaces.%s.facing", onceBoughtFurnace)).toUpperCase();
 
-            IBlockData blockData;
-            if (state.equals("PLACED")) {
-                Bukkit.getLogger().info("Placed");
-                blockData = Blocks.FURNACE.getBlockData().set(FACING, EnumDirection.valueOf(facing));
-            } else if (state.equals("MELTS")) {
-                Bukkit.getLogger().info("Melts");
-                blockData = Blocks.LIT_FURNACE.getBlockData().set(FACING, EnumDirection.valueOf(facing));
-            } else {
-                Bukkit.getLogger().info("Empty");
-                blockData = Blocks.AIR.getBlockData();
+                IBlockData blockData;
+                if (state.equals("PLACED_EMPTY") || state.equals("PLACED_MELTED")) {
+                    blockData = Blocks.FURNACE.getBlockData().set(FACING, EnumDirection.valueOf(facing));
+                } else if (state.equals("PLACED_MELTING")) {
+                    blockData = Blocks.LIT_FURNACE.getBlockData().set(FACING, EnumDirection.valueOf(facing));
+                } else {
+                    blockData = Blocks.AIR.getBlockData();
+                }
+
+                int chunkSectionNum = globalY/16;
+                int x = getXInChunk(globalX);
+                int y = getYInChunk(globalY);
+                int z = getZInChunk(globalZ);
+                chunk.getSections()[chunkSectionNum].setType(x, y, z, blockData);
             }
-
-            int chunkSectionNum = globalY/16;
-            int x = getXInChunk(globalX);
-            int y = getYInChunk(globalY);
-            int z = getZInChunk(globalZ);
-            chunk.getSections()[chunkSectionNum].setType(x, y, z, blockData);
-            IBlockData block = chunk.getSections()[chunkSectionNum].getType(x, y, z);
-            Bukkit.getLogger().info("Блок: " + block.getBlock().getName());
         }
     }
 
@@ -436,6 +389,7 @@ public class ChunkSendingListener extends PacketAdapter {
         }
     }
 
+    @SuppressWarnings("unused")
     public static int getEntityCount() {
         return entityCount;
     }

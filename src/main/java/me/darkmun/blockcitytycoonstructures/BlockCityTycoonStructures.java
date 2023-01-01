@@ -4,9 +4,7 @@ import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.ProtocolManager;
 import me.darkmun.blockcitytycoonstructures.commands.ChangeStructureCommand;
-import me.darkmun.blockcitytycoonstructures.commands.Test2Command;
 import me.darkmun.blockcitytycoonstructures.listeners.ChunkSendingListener;
-import me.darkmun.blockcitytycoonstructures.listeners.JoinListener;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -44,9 +42,9 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
 
             ProtocolManager manager = ProtocolLibrary.getProtocolManager();
 
-            getCommand("testspawn").setExecutor(new Test2Command());
+            //getCommand("testspawn").setExecutor(new Test2Command());
             getCommand("chunkchange").setExecutor(new ChangeStructureCommand(this));
-            getServer().getPluginManager().registerEvents(new JoinListener(), this);
+            //getServer().getPluginManager().registerEvents(new JoinListener(), this);
             manager.addPacketListener(new ChunkSendingListener(this, PacketType.Play.Server.MAP_CHUNK));
 
             getLogger().log(Level.INFO, "Plugin enabled.");

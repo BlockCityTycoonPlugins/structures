@@ -1,6 +1,5 @@
 package me.darkmun.blockcitytycoonstructures;
 
-import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -11,12 +10,13 @@ public class CustomConfig {
     private File file;
     private FileConfiguration config;
 
+    @SuppressWarnings("unused")
     public void setup(File dataFolder, String configName) {
 
         file = new File(dataFolder, configName + ".yml");
         if (!file.exists()) {
             try {
-                file.createNewFile();
+                boolean created = file.createNewFile();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -29,6 +29,7 @@ public class CustomConfig {
         return config;
     }
 
+    @SuppressWarnings("unused")
     public void saveConfig() {
         try {
             config.save(file);

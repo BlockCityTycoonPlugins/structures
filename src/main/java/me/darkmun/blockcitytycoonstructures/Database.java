@@ -9,17 +9,15 @@ public class Database {
     private Connection connection = null;
 
     public Connection getConnection() throws SQLException {
-        if (connection != null) {
-            return connection;
+        if (connection == null) {
+            java.util.Properties conProperties = new java.util.Properties();
+            conProperties.put("user", "u95570_LRzuS0M9U7");
+            conProperties.put("password", "uMGeUJbmt!oH^FYk^I1VSSTW");
+            conProperties.put("autoReconnect", "true");
+            conProperties.put("maxReconnects", "15");
+            String url = "jdbc:mysql://mysql2.joinserver.xyz:3306/s95570_BlockCityTycoon";
+            connection = DriverManager.getConnection(url, conProperties);
         }
-
-        java.util.Properties conProperties = new java.util.Properties();
-        conProperties.put("user", "u95570_LRzuS0M9U7");
-        conProperties.put("password", "uMGeUJbmt!oH^FYk^I1VSSTW");
-        conProperties.put("autoReconnect", "true");
-        conProperties.put("maxReconnects", "5");
-        String url = "jdbc:mysql://mysql2.joinserver.xyz:3306/s95570_BlockCityTycoon";
-        connection = DriverManager.getConnection(url, conProperties);
         return connection;
     }
 
@@ -39,4 +37,6 @@ public class Database {
             e.printStackTrace();
         }
     }
+
+
 }
