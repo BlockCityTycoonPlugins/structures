@@ -6,5 +6,3 @@ depend: [ProtocolLib, PacketWrapper]
 commands:
   chunkchange:
     description: Changes chunks from the config
-  testspawn:
-    description: test
