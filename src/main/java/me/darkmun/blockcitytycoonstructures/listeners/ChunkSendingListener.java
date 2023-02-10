@@ -46,10 +46,21 @@ public class ChunkSendingListener extends PacketAdapter {
     private static int entityCount = 0;
     private static final FileConfiguration BCTSConfig = BlockCityTycoonStructures.getPlugin().getConfig();
     private static final CustomConfig BCTFPlayersFurnacesDataConfig = BlockCityTycoonStructures.getBCTFPlayersFurnacesDataConfig();
+    private static final CustomConfig BCTEPlayersEventsDataConfig = BlockCityTycoonStructures.getBCTEPlayersEventsDataConfig();
     private static final FileConfiguration BCTFConfig = Bukkit.getPluginManager().getPlugin("BlockCityTycoonFoundry").getConfig();
+    private static final FileConfiguration BCTEConfig = Bukkit.getPluginManager().getPlugin("BlockCityTycoonEvents").getConfig();
+    List<BaseBlockPosition> ritualBlocksCoords = new ArrayList<>();
 
     public ChunkSendingListener(Plugin plugin, PacketType... types) {
         super(plugin, types);
+
+        Set<String> blockNames = BCTEConfig.getConfigurationSection("rain-event.ritual-blocks-coord").getKeys(false);
+        for (String name : blockNames) {
+            int x = BCTEConfig.getInt("rain-event.ritual-blocks-coord." + name + ".x");
+            int y = BCTEConfig.getInt("rain-event.ritual-blocks-coord." + name + ".y");
+            int z = BCTEConfig.getInt("rain-event.ritual-blocks-coord." + name + ".z");
+            ritualBlocksCoords.add(new BaseBlockPosition(x, y, z));
+        }
     }
 
     @Override
@@ -64,7 +75,8 @@ public class ChunkSendingListener extends PacketAdapter {
 
         try {
             changeChunkToPlayer(BlockCityTycoonStructures.getPlayerUpgradesConfig(), wrapper, ChunkX, ChunkZ, pl);
-        } catch (IOException e) {
+        } catch (IOException | NoSuchFieldException | InvocationTargetException | IllegalAccessException |
+                 NoSuchMethodException e) {
             e.printStackTrace();
         }
     }
@@ -140,7 +152,7 @@ public class ChunkSendingListener extends PacketAdapter {
     }
 
     @SuppressWarnings("unchecked")
-    public void changeChunkToPlayer(CustomConfig playerUpgradesConfig, WrapperPlayServerMapChunk packet, int ChunkX, int ChunkZ, Player player) throws IOException {
+    public void changeChunkToPlayer(CustomConfig playerUpgradesConfig, WrapperPlayServerMapChunk packet, int ChunkX, int ChunkZ, Player player) throws IOException, NoSuchFieldException, InvocationTargetException, IllegalAccessException, NoSuchMethodException {
         Set<String> businesses = BCTSConfig.getKeys(false);
         Set<String> businessChunkUpgradeChunks;
         String businessValue;
@@ -153,115 +165,151 @@ public class ChunkSendingListener extends PacketAdapter {
         int pasteChunkX;
         int pasteChunkZ;
 
-        for (String business : businesses) {
-            if (playerUpgradesConfig.getConfig().contains(plUUID + "." + business)) {
-                businessValue = playerUpgradesConfig.getConfig().getString(plUUID + "." + business);
-                //if (chunkDataConfig.getConfig().contains(business + "." + businessValue)) {
-                businessChunkUpgradeChunks = BCTSConfig.getConfigurationSection(business + "." + businessValue).getKeys(false);
-                for (String businessChunkUpgradeChunk : businessChunkUpgradeChunks) {
-                    pasteChunkX = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".paste-to-chunk-x");
-                    pasteChunkZ = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".paste-to-chunk-z");
-                    if ((ChunkX == pasteChunkX) && (ChunkZ == pasteChunkZ)) {
-                        try (PreparedStatement statement = BlockCityTycoonStructures.getDatabase().getConnection().prepareStatement("SELECT * FROM chunk_data WHERE structure = ? AND upgrade = ? AND chunk = ?")) {
-                            statement.setString(1, business);
-                            statement.setString(2, businessValue);
-                            statement.setString(3, businessChunkUpgradeChunk);
-                            ResultSet set = statement.executeQuery();
-                            if (set.next()) {
-                                data = set.getBytes("data");
-                                bitMask = set.getInt("bit_mask");
-                                groundUp = set.getBoolean("ground_up_continuous");
-                                byte[] tileEntitiesBytes = set.getBytes("tile_entities");
-                                byte[] paintingBytes = set.getBytes("paintings");
-                                byte[] itemFrameBytes = set.getBytes("item_frames");
+        BaseBlockPosition ritualBlockPositionInChunk = ritualBlocksCoords.stream().filter(blockPos ->
+                (blockPos.getX() < 0 ? (blockPos.getX() + 1)/CHUNK_WIDTH - 1 : blockPos.getX()/CHUNK_WIDTH) == ChunkX
+                        && (blockPos.getZ() < 0 ? (blockPos.getZ() + 1)/CHUNK_WIDTH - 1 : blockPos.getZ()/CHUNK_WIDTH) == ChunkZ)
+                .findAny().orElse(null);
+        if (ritualBlockPositionInChunk != null) {
+            Chunk chunk;
+            if (packet.getGroundUpContinuous()) {
+                chunk = new Chunk(((CraftPlayer)player).getHandle().getWorld(), ChunkX, ChunkZ);
+            } else {
+                chunk = ((CraftPlayer)player).getHandle().getWorld().getChunkAt(ChunkX, ChunkZ);
+            }
+            ChunkDataSerializer chunkDataSerializer = new ChunkDataSerializer();
+            chunkDataSerializer.ReadChunkColumn(chunk, packet.getBitmask(), Unpooled.wrappedBuffer(packet.getData()));
+
+            setPlayerRitualBlockToChunk(plUUID, ritualBlockPositionInChunk, chunk);
+            PacketPlayOutMapChunk packetMapChunk = new PacketPlayOutMapChunk(chunk, 65535);
+
+            byte[] bytes;
+            Field dataField;
+            try {
+                dataField = packetMapChunk.getClass().getDeclaredField("d");
+                dataField.setAccessible(true);
+                bytes = (byte[])dataField.get(packetMapChunk);
+                dataField.setAccessible(false);
+
+                /*WrapperPlayServerUnloadChunk wrapperUnloadChunk = new WrapperPlayServerUnloadChunk();
+                wrapperUnloadChunk.setChunkX(ChunkX);
+                wrapperUnloadChunk.setChunkZ(ChunkZ);
+                wrapperUnloadChunk.sendPacket(player);*/
+
+                packet.setData(bytes);
+            } catch (NoSuchFieldException | SecurityException | IllegalAccessException e){
+                e.printStackTrace();
+            }
+        } else {
+            for (String business : businesses) {
+                if (playerUpgradesConfig.getConfig().contains(plUUID + "." + business)) {
+                    businessValue = playerUpgradesConfig.getConfig().getString(plUUID + "." + business);
+                    //if (chunkDataConfig.getConfig().contains(business + "." + businessValue)) {
+                    businessChunkUpgradeChunks = BCTSConfig.getConfigurationSection(business + "." + businessValue).getKeys(false);
+                    for (String businessChunkUpgradeChunk : businessChunkUpgradeChunks) {
+                        pasteChunkX = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".paste-to-chunk-x");
+                        pasteChunkZ = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".paste-to-chunk-z");
+                        if ((ChunkX == pasteChunkX) && (ChunkZ == pasteChunkZ)) {
+                            try (PreparedStatement statement = BlockCityTycoonStructures.getDatabase().getConnection().prepareStatement("SELECT * FROM chunk_data WHERE structure = ? AND upgrade = ? AND chunk = ?")) {
+                                statement.setString(1, business);
+                                statement.setString(2, businessValue);
+                                statement.setString(3, businessChunkUpgradeChunk);
+                                ResultSet set = statement.executeQuery();
+                                if (set.next()) {
+                                    data = set.getBytes("data");
+                                    bitMask = set.getInt("bit_mask");
+                                    groundUp = set.getBoolean("ground_up_continuous");
+                                    byte[] tileEntitiesBytes = set.getBytes("tile_entities");
+                                    byte[] paintingBytes = set.getBytes("paintings");
+                                    byte[] itemFrameBytes = set.getBytes("item_frames");
 
 
-                                List<NbtBase<?>> tileEntities = new ArrayList<>();
-                                NbtBinarySerializer nbtSerializer = new NbtBinarySerializer();
-                                ByteArrayInputStream bais = new ByteArrayInputStream(tileEntitiesBytes);
-                                DataInputStream in = new DataInputStream(bais);
-                                while (in.available() > 0) {
-                                    tileEntities.add(nbtSerializer.deserialize(in));
+                                    List<NbtBase<?>> tileEntities = new ArrayList<>();
+                                    NbtBinarySerializer nbtSerializer = new NbtBinarySerializer();
+                                    ByteArrayInputStream bais = new ByteArrayInputStream(tileEntitiesBytes);
+                                    DataInputStream in = new DataInputStream(bais);
+                                    while (in.available() > 0) {
+                                        tileEntities.add(nbtSerializer.deserialize(in));
+                                    }
+
+                                    int copyChunkX = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".copy-from-chunk-x");
+                                    int copyChunkZ = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".copy-from-chunk-z");
+                                    int chunkXDelta = pasteChunkX - copyChunkX;
+                                    int chunkZDelta = pasteChunkZ - copyChunkZ;
+
+                                    for (NbtBase<?> tileEntity : tileEntities) {
+                                        Map<String, NbtBase<?>> map = (Map<String, NbtBase<?>>) tileEntity.getValue();
+                                        int x = (int) map.get("x").getValue();
+                                        int z = (int) map.get("z").getValue();
+                                        map.put("x", NbtFactory.of("x", x + CHUNK_WIDTH * chunkXDelta));
+                                        map.put("z", NbtFactory.of("z", z + CHUNK_WIDTH * chunkZDelta));
+
+                                    }
+
+                                    ByteArrayInputStream baisPaintings = new ByteArrayInputStream(paintingBytes);
+                                    List<NBTTagCompound> paintings = deserializeEntities(baisPaintings);
+                                    for (NBTTagCompound painting : paintings) {
+                                        double paintingX = painting.getInt("TileX");
+                                        double paintingY = painting.getInt("TileY");
+                                        double paintingZ = painting.getInt("TileZ");
+                                        Location newLocation = new Location(player.getWorld(), paintingX + CHUNK_WIDTH * chunkXDelta, paintingY, paintingZ + CHUNK_WIDTH * chunkZDelta);
+                                        sendPaintingFromNBT(painting, newLocation, player);
+                                    }
+
+                                    ByteArrayInputStream baisItemFrames = new ByteArrayInputStream(itemFrameBytes);
+                                    List<NBTTagCompound> itemFrames = deserializeEntities(baisItemFrames);
+                                    for (NBTTagCompound itemFrame : itemFrames) {
+                                        NBTTagList nbttaglist = itemFrame.getList("Pos", 6);
+                                        double paintingX = nbttaglist.f(0);
+                                        double paintingY = nbttaglist.f(1);
+                                        double paintingZ = nbttaglist.f(2);
+                                        Location newLocation = new Location(player.getWorld(), paintingX + CHUNK_WIDTH * chunkXDelta, paintingY, paintingZ + CHUNK_WIDTH * chunkZDelta);
+                                        sendItemFrameFromNBT(itemFrame, newLocation, player);
+                                    }
+
+                                    Chunk chunk;
+                                    if (groundUp) {
+                                        chunk = new Chunk(((CraftPlayer)player).getHandle().getWorld(), ChunkX, ChunkZ);
+                                    } else {
+                                        chunk = ((CraftPlayer)player).getHandle().getWorld().getChunkAt(ChunkX, ChunkZ);
+                                    }
+                                    ChunkDataSerializer chunkDataSerializer = new ChunkDataSerializer();
+                                    chunkDataSerializer.ReadChunkColumn(chunk, bitMask, Unpooled.wrappedBuffer(data));
+                                    if (ChunkX == FOUNDRY_CHUNK_X && ChunkZ == FOUNDRY_CHUNK_Z) {
+                                        setPlayersFoundryFurnacesToChunk(plUUID, chunk);
+                                    }
+
+                                    PacketPlayOutMapChunk packetMapChunk = new PacketPlayOutMapChunk(chunk, 65535);
+
+                                    byte[] bytes;
+                                    Field dataField;
+                                    try {
+                                        dataField = packetMapChunk.getClass().getDeclaredField("d");
+                                        dataField.setAccessible(true);
+                                        bytes = (byte[])dataField.get(packetMapChunk);
+                                        dataField.setAccessible(false);
+
+                                        WrapperPlayServerUnloadChunk wrapperUnloadChunk = new WrapperPlayServerUnloadChunk();
+                                        wrapperUnloadChunk.setChunkX(ChunkX);
+                                        wrapperUnloadChunk.setChunkZ(ChunkZ);
+                                        wrapperUnloadChunk.sendPacket(player);
+
+                                        packet.setData(bytes);
+                                        //packet.setData(data);
+                                        packet.setBitmask(bitMask);
+                                        packet.setGroundUpContinuous(groundUp);
+                                        packet.setTileEntities(tileEntities);
+                                    } catch (NoSuchFieldException | SecurityException | IllegalAccessException e){
+                                        e.printStackTrace();
+                                    }
                                 }
 
-                                int copyChunkX = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".copy-from-chunk-x");
-                                int copyChunkZ = BCTSConfig.getInt(business + "." + businessValue + "." + businessChunkUpgradeChunk + ".copy-from-chunk-z");
-                                int chunkXDelta = pasteChunkX - copyChunkX;
-                                int chunkZDelta = pasteChunkZ - copyChunkZ;
-
-                                for (NbtBase<?> tileEntity : tileEntities) {
-                                    Map<String, NbtBase<?>> map = (Map<String, NbtBase<?>>) tileEntity.getValue();
-                                    int x = (int) map.get("x").getValue();
-                                    int z = (int) map.get("z").getValue();
-                                    map.put("x", NbtFactory.of("x", x + CHUNK_WIDTH * chunkXDelta));
-                                    map.put("z", NbtFactory.of("z", z + CHUNK_WIDTH * chunkZDelta));
-
-                                }
-
-                                ByteArrayInputStream baisPaintings = new ByteArrayInputStream(paintingBytes);
-                                List<NBTTagCompound> paintings = deserializeEntities(baisPaintings);
-                                for (NBTTagCompound painting : paintings) {
-                                    double paintingX = painting.getInt("TileX");
-                                    double paintingY = painting.getInt("TileY");
-                                    double paintingZ = painting.getInt("TileZ");
-                                    Location newLocation = new Location(player.getWorld(), paintingX + CHUNK_WIDTH * chunkXDelta, paintingY, paintingZ + CHUNK_WIDTH * chunkZDelta);
-                                    sendPaintingFromNBT(painting, newLocation, player);
-                                }
-
-                                ByteArrayInputStream baisItemFrames = new ByteArrayInputStream(itemFrameBytes);
-                                List<NBTTagCompound> itemFrames = deserializeEntities(baisItemFrames);
-                                for (NBTTagCompound itemFrame : itemFrames) {
-                                    NBTTagList nbttaglist = itemFrame.getList("Pos", 6);
-                                    double paintingX = nbttaglist.f(0);
-                                    double paintingY = nbttaglist.f(1);
-                                    double paintingZ = nbttaglist.f(2);
-                                    Location newLocation = new Location(player.getWorld(), paintingX + CHUNK_WIDTH * chunkXDelta, paintingY, paintingZ + CHUNK_WIDTH * chunkZDelta);
-                                    sendItemFrameFromNBT(itemFrame, newLocation, player);
-                                }
-
-                                Chunk chunk;
-                                if (groundUp) {
-                                    chunk = new Chunk(((CraftPlayer)player).getHandle().getWorld(), ChunkX, ChunkZ);
-                                } else {
-                                    chunk = ((CraftPlayer)player).getHandle().getWorld().getChunkAt(ChunkX, ChunkZ);
-                                }
-                                ChunkDataSerializer chunkDataSerializer = new ChunkDataSerializer();
-                                chunkDataSerializer.ReadChunkColumn(chunk, bitMask, Unpooled.wrappedBuffer(data));
-                                if (ChunkX == FOUNDRY_CHUNK_X && ChunkZ == FOUNDRY_CHUNK_Z) {
-                                    setPlayersFoundryFurnacesToChunk(plUUID, chunk);
-                                }
-
-                                PacketPlayOutMapChunk packetMapChunk = new PacketPlayOutMapChunk(chunk, 65535);
-
-                                byte[] bytes;
-                                Field dataField;
-                                try {
-                                    dataField = packetMapChunk.getClass().getDeclaredField("d");
-                                    dataField.setAccessible(true);
-                                    bytes = (byte[])dataField.get(packetMapChunk);
-                                    dataField.setAccessible(false);
-
-                                    WrapperPlayServerUnloadChunk wrapperUnloadChunk = new WrapperPlayServerUnloadChunk();
-                                    wrapperUnloadChunk.setChunkX(ChunkX);
-                                    wrapperUnloadChunk.setChunkZ(ChunkZ);
-                                    wrapperUnloadChunk.sendPacket(player);
-
-                                    packet.setData(bytes);
-                                    //packet.setData(data);
-                                    packet.setBitmask(bitMask);
-                                    packet.setGroundUpContinuous(groundUp);
-                                    packet.setTileEntities(tileEntities);
-                                } catch (NoSuchFieldException | SecurityException | IllegalAccessException e){
-                                    e.printStackTrace();
-                                }
+                            } catch (SQLException | NoSuchFieldException | InvocationTargetException |
+                                     IllegalAccessException | NoSuchMethodException | MojangsonParseException ex) {
+                                ex.printStackTrace();
                             }
 
-                        } catch (SQLException | NoSuchFieldException | InvocationTargetException |
-                                 IllegalAccessException | NoSuchMethodException | MojangsonParseException ex) {
-                            ex.printStackTrace();
+                            return;
                         }
-
-                        return;
                     }
                 }
             }
@@ -343,7 +391,7 @@ public class ChunkSendingListener extends PacketAdapter {
     }
 
     private void setPlayersFoundryFurnacesToChunk(String plUUID, Chunk chunk) {
-        BlockCityTycoonStructures.getBCTFPlayersFurnacesDataConfig().reloadConfig();
+        BCTFPlayersFurnacesDataConfig.reloadConfig();
         if (BCTFPlayersFurnacesDataConfig.getConfig().contains(plUUID)) {
             Set<String> playersFurnaces = BCTFPlayersFurnacesDataConfig.getConfig().getConfigurationSection(String.format("%s.furnaces", plUUID)).getKeys(false);
             for (String onceBoughtFurnace : playersFurnaces) {
@@ -354,11 +402,11 @@ public class ChunkSendingListener extends PacketAdapter {
                 String facing = BCTFConfig.getString(String.format("furnaces.%s.facing", onceBoughtFurnace)).toUpperCase();
 
                 IBlockData blockData;
-                if (state.equals("PLACED_EMPTY") || state.equals("PLACED_MELTED")) {
+                if (state.equals("PLACED_EMPTY") || state.equals("PLACED_MELTED") || state.equals("PLACED_MELTING")) {
                     blockData = Blocks.FURNACE.getBlockData().set(FACING, EnumDirection.valueOf(facing));
-                } else if (state.equals("PLACED_MELTING")) {
+                } /*else if (state.equals("PLACED_MELTING")) {
                     blockData = Blocks.LIT_FURNACE.getBlockData().set(FACING, EnumDirection.valueOf(facing));
-                } else {
+                }*/ else {
                     blockData = Blocks.AIR.getBlockData();
                 }
 
@@ -371,21 +419,45 @@ public class ChunkSendingListener extends PacketAdapter {
         }
     }
 
+    private void setPlayerRitualBlockToChunk(String plUUID, BaseBlockPosition ritualBlockPos, Chunk chunk) {
+        BCTEPlayersEventsDataConfig.reloadConfig();
+        //CustomConfig BCTEPlayersEventsDataConfig = BlockCityTycoonStructures.getBCTEPlayersEventsDataConfig();
+        if (BCTEPlayersEventsDataConfig.getConfig().contains(String.format("%s.rain-event.ritual-blocks", plUUID))) {
+            Set<String> playersRitualBlocks = BCTEPlayersEventsDataConfig.getConfig().getConfigurationSection(String.format("%s.rain-event.ritual-blocks", plUUID)).getKeys(false);
+            for (String ritualBlock : playersRitualBlocks) {
+                if (BCTEPlayersEventsDataConfig.getConfig().getBoolean(String.format("%s.rain-event.ritual-blocks.%s.placed", plUUID, ritualBlock))) {
+                    int globalX = BCTEConfig.getInt("rain-event.ritual-blocks-coord." + ritualBlock + ".x");
+                    int globalY = BCTEConfig.getInt("rain-event.ritual-blocks-coord." + ritualBlock + ".y");
+                    int globalZ = BCTEConfig.getInt("rain-event.ritual-blocks-coord." + ritualBlock + ".z");
+                    if (ritualBlockPos.equals(new BaseBlockPosition(globalX, globalY, globalZ))) {
+                        IBlockData blockData = Block.getById(239).getBlockData();
+                        int chunkSectionNum = globalY/CHUNK_WIDTH;
+                        int x = getXInChunk(globalX);
+                        int y = getYInChunk(globalY);
+                        int z = getZInChunk(globalZ);
+                        chunk.getSections()[chunkSectionNum].setType(x, y, z, blockData);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     public static int getXInChunk(int x) {
         if (x < 0) {
-            return 16 + x % 16;
+            return CHUNK_WIDTH + x % CHUNK_WIDTH;
         } else {
-            return x % 16;
+            return x % CHUNK_WIDTH;
         }
     }
     public static int getYInChunk(int y) {
-        return y % 16;
+        return y % CHUNK_WIDTH;
     }
     public static int getZInChunk(int z) {
         if (z < 0) {
-            return 16 + z % 16;
+            return CHUNK_WIDTH + z % CHUNK_WIDTH;
         } else {
-            return z % 16;
+            return z % CHUNK_WIDTH;
         }
     }
 

@@ -4,6 +4,7 @@ import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.ProtocolManager;
 import me.darkmun.blockcitytycoonstructures.commands.ChangeStructureCommand;
+import me.darkmun.blockcitytycoonstructures.commands.ReloadCommand;
 import me.darkmun.blockcitytycoonstructures.listeners.ChunkSendingListener;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -13,8 +14,9 @@ import java.util.logging.Level;
 
 public final class BlockCityTycoonStructures extends JavaPlugin {
 
-    private static CustomConfig playerUpgradesConfig;
+    private static final CustomConfig playerUpgradesConfig = new CustomConfig();
     private static final CustomConfig BCTFPlayersFurnacesDataConfig = new CustomConfig(); //это из плагина с плавильней
+    private static final CustomConfig BCTEPlayersEventsDataConfig = new CustomConfig();
     private static Database database;
     private static BlockCityTycoonStructures plugin;
 
@@ -25,12 +27,12 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
         plugin = this;
 
         if (getConfig().getBoolean("enable")) {
-            playerUpgradesConfig = new CustomConfig();
-
             playerUpgradesConfig.setup(getDataFolder(), "playersUpgrades");
             playerUpgradesConfig.getConfig().options().copyDefaults(true);
 
             BCTFPlayersFurnacesDataConfig.setup(Bukkit.getPluginManager().getPlugin("BlockCityTycoonFoundry").getDataFolder(), "players-furnaces-data");
+
+            BCTEPlayersEventsDataConfig.setup(Bukkit.getPluginManager().getPlugin("BlockCityTycoonEvents").getDataFolder(), "playerEventsData");
 
             try {
                 database = new Database();
@@ -44,6 +46,7 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
 
             //getCommand("testspawn").setExecutor(new Test2Command());
             getCommand("chunkchange").setExecutor(new ChangeStructureCommand(this));
+            getCommand("bctstructures").setExecutor(new ReloadCommand());
             //getServer().getPluginManager().registerEvents(new JoinListener(), this);
             manager.addPacketListener(new ChunkSendingListener(this, PacketType.Play.Server.MAP_CHUNK));
 
@@ -67,6 +70,10 @@ public final class BlockCityTycoonStructures extends JavaPlugin {
 
     public static CustomConfig getBCTFPlayersFurnacesDataConfig() {
         return BCTFPlayersFurnacesDataConfig;
+    }
+
+    public static CustomConfig getBCTEPlayersEventsDataConfig() {
+        return BCTEPlayersEventsDataConfig;
     }
 
     public static Database getDatabase() {

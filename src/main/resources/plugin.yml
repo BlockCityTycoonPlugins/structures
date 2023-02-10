@@ -6,3 +6,5 @@ depend: [ProtocolLib, PacketWrapper]
 commands:
   chunkchange:
     description: Changes chunks from the config
+  bctstructures:
+    description: Для перезагрузки конфига
